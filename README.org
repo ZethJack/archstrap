@@ -19,6 +19,7 @@
     - [[#vconsoleconf-and-keyboard][vconsole.conf and keyboard]]
     - [[#install-microcode][Install microcode]]
     - [[#enabling-aur][Enabling AUR]]
+  - [[#actual-script][Actual script]]
 
 * About this file
 This is literate script that is supposed to configure freshly installed arch linux system and bring it from out-of-the-box to my personalized system. It should install necessary programs, download and set up the dotfiles and add some tweaks such as enable parallel downloads and candy mode for pacman.
@@ -139,4 +140,14 @@ sudo -u "$user" git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$s
 cd "$srcdir/paru-bin"
 sudo -u "$user" -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
 }
+#+end_src
+
+** Actual script
+Of course for script to do anything it's probably a good idea to call these functions in order
+#+begin_src sh
+pacmantweaks()
+procs()
+vconsole()
+microcodes()
+enableaur()
 #+end_src

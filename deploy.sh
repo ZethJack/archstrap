@@ -64,3 +64,8 @@ sudo -u "$user" git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$s
 cd "$srcdir/paru-bin"
 sudo -u "$user" -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
 }
+pacmantweaks()
+procs()
+vconsole()
+microcodes()
+enableaur()
