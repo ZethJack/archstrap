@@ -145,9 +145,9 @@ sudo -u "$user" -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 ||
 ** Actual script
 Of course for script to do anything it's probably a good idea to call these functions in order
 #+begin_src sh
-pacmantweaks()
-procs()
-vconsole()
-microcodes()
-enableaur()
+pacmantweaks
+procs
+vconsole
+microcodes
+enableaur
 #+end_src
