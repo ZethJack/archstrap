@@ -1,4 +1,4 @@
-#+TITLE: #+title: Bootstrap script
+#+TITLE: Bootstrap script
 #+author:    Zeth
 #+email:     zeth@zethjack.eu
 #+PROPERTY: header-args:sh :tangle deploy.sh :shebang "#!/bin/env bash" :padline no :tangle-mode (identity #o755)
@@ -26,7 +26,7 @@ This is literate script that is supposed to configure freshly installed arch lin
 *DISCLAIMER!!!* This script has been written for my personal use and as such comes with NO WARRANTY. Some files require =sudo= permissions for editing. I advise you to /read/ the script first and see what it does before run it, rather than mindlessly make it executable and run it for no reason.
 
 * Usage
-1. At the end of the Arch installation using =archinstall= script, you will be asked if you want to chroot to the newly created system. Select yes
+1. After booting into newly installed system run script as regular user. Some parts of the script require elevation to sudo, so permissions for the user will be necessary.
 2. download the =deploy.sh= script from this repository:
    - with wget
      #+begin_src sh :tangle no :shebang
@@ -50,10 +50,10 @@ srcdir=/home/$user/.local/src
 ** Function definitions
 
 *** Self-destruct function
-This function is called upon scripts exit and is used to self-delete the script once everything is done
-#+BEGIN_SRC sh
+This function is called upon scripts exit and is used to self-delete the script once everything is done - it's disabled for time being i.e. it will not get tangled into final script.
+#+BEGIN_SRC sh :tangle no
 function finish {
-echo "shredding ${currentscript}"; shred -u ${currentscript};
+    echo "shredding ${currentscript}"; shred -u ${currentscript};
 }
 
 #whenver the script exits call the function "finish"
@@ -64,24 +64,32 @@ trap finish EXIT
 This function edits =/etc/pacman.conf= file to enable parallel downloads and makes it more colorful also adds automatic hook to clean cache and notify of orphanned packages. Finally it also enables multilib in pacman's repository
 #+begin_src sh
 function pacmantweaks {
-echo "Enabling parallel downloads and candy for pacman"
-sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
-sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
-sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
-tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
-[Trigger]
-Operation = Upgrade
-Operation = Install
-Operation = Remove
-Type = Package
-Target = *
+    echo -ne "
+    ################################################
+    Enabling parallel downloads and candy for pacman
+    ################################################
+    "
+    sudo sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
+    sudo sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
+    echo -ne "
+    #########################################################
+    Enablng paccache hook to automatically clean pacman cache
+    #########################################################
+    "
+    sudo tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
+    [Trigger]
+    Operation = Upgrade
+    Operation = Install
+    Operation = Remove
+    Type = Package
+    Target = *
 
-[Action]
-Description = Cleaning pacman cache with paccache …
-When = PostTransaction
-Exec = /usr/bin/paccache -r
-EOF
-pacman -Sy --noconfirm --needed
+    [Action]
+    Description = Cleaning pacman cache with paccache …
+    When = PostTransaction
+    Exec = /usr/bin/paccache -r
+    EOF
+    pacman -Sy --noconfirm --needed
 }
 #+end_src
 
@@ -89,12 +97,17 @@ pacman -Sy --noconfirm --needed
 This function detects how many cores the CPU has and adjusts makeflags and compression settings accordingly
 #+begin_src sh
 function procs {
-nc=$(grep -c ^processor /proc/cpuinfo)
-TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
-if [[  $TOTAL_MEM -gt 8000000 ]]; then
-sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
-sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
-fi
+    echo -ne "
+    #################################################
+    Detecting number of cores and adjusting makeflags
+    #################################################
+    "
+    nc=$(grep -c ^processor /proc/cpuinfo)
+    TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
+    if [[  $TOTAL_MEM -gt 8000000 ]]; then
+        sudo sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
+        sudo sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
+    fi
 }
 #+end_src
 
@@ -102,13 +115,21 @@ fi
 Set vitrtual console's font to =Lat2-Terminus16= and keymap to =cz-qwertz= this is personal preference. The font supports czech characters while the keymap saves me the headache of having to fight my own muscle memory as far as keyboard layout goes.
 #+begin_src sh
 function vconsole {
-echo "Writing settings to /etc/vconsole.conf in case I ever need to do things from TTY"
-tee /etc/vconsole.conf >/dev/null <<'EOF'
-KEYMAP=cz-qwertz
-FONT=Lat2-Terminus16
-EOF
-echo "Setting X's locale to cz"
-localectl set-x11-keymap cz
+    echo -ne "
+    ################################################################################
+    Writing settings to /etc/vconsole.conf in case I ever need to do things from TTY
+    ################################################################################
+    "
+    sudo tee /etc/vconsole.conf >/dev/null <<'EOF'
+    KEYMAP=cz-qwertz
+    FONT=Lat2-Terminus16
+    EOF
+    echo -ne"
+    ########################
+    Setting X's locale to cz
+    ########################
+    "
+    localectl set-x11-keymap cz
 }
 #+end_src
 
@@ -116,16 +137,21 @@ localectl set-x11-keymap cz
 Determine which processor we are running and install microcode accordingly
 #+begin_src sh
 function microcodes {
-proc_type=$(lscpu)
-if grep -E "GenuineIntel" <<< ${proc_type}; then
-    echo "Installing Intel microcode"
-    pacman -S --noconfirm --needed intel-ucode
-    proc_ucode=intel-ucode.img
-elif grep -E "AuthenticAMD" <<< ${proc_type}; then
-    echo "Installing AMD microcode"
-    pacman -S --noconfirm --needed amd-ucode
-    proc_ucode=amd-ucode.img
-fi
+    echo -ne "
+    #############################
+    Installing microcodes for CPU
+    #############################
+    "
+    proc_type=$(lscpu)
+    if grep -E "GenuineIntel" <<< ${proc_type}; then
+        echo "Installing Intel microcode"
+        pacman -S --noconfirm --needed intel-ucode
+        proc_ucode=intel-ucode.img
+    elif grep -E "AuthenticAMD" <<< ${proc_type}; then
+        echo "Installing AMD microcode"
+        pacman -S --noconfirm --needed amd-ucode
+        proc_ucode=amd-ucode.img
+    fi
 }
 #+end_src
 
@@ -134,11 +160,11 @@ fi
 This function should install an AUR helper which will be needed to help install some packages from the list. The commands need to be run as non-root user. For that I've set up a variable.
 #+begin_src sh
 function enableaur {
-sudo -u "$user" mkdir -p "$srcdir/paru-bin"
-sudo -u "$user" git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$srcdir/paru" >/dev/null 2>&1 ||
-{ cd "$srcdir/paru-bin" || return 1 ; sudo -u "$user" git pull --force origin master;}
-cd "$srcdir/paru-bin"
-sudo -u "$user" -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
+    mkdir -p "$srcdir/paru-bin"
+    git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$srcdir/paru" >/dev/null 2>&1 ||
+    { cd "$srcdir/paru-bin" || return 1 ; git pull --force origin master;}
+    cd "$srcdir/paru-bin" || return 1
+    sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
 }
 #+end_src
 
