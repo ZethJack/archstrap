@@ -165,7 +165,7 @@ cd "$srcdir/paru-bin" || return 1
 sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
 #+end_src
 
-** Actual script
+** Actual script :ignore:
 Of course for script to do anything it's probably a good idea to call these functions in order
 #+begin_src sh :tangle deploy.sh :noweb no-export
 <<pacman>>
