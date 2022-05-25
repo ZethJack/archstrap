@@ -23,6 +23,8 @@
     - [[#makeflags-and-cores][makeflags and cores]]
     - [[#vconsoleconf-and-keyboard][vconsole.conf and keyboard]]
     - [[#install-microcode][Install microcode]]
+    - [[#user-related-functions-and-welcome-messages][User related functions and welcome messages]]
+    - [[#newperms][Newperms]]
     - [[#enabling-aur][Enabling AUR]]
 
 * About this file
@@ -92,6 +94,81 @@ Basic pacman call
 installpkg(){ pacman --noconfirm --needed -S "$1" >/dev/null 2>&1 ;}
 #+end_src
 
+**** manualinstall
+Installs $1 manually. Used only for AUR helper here. Should be run after repodir is created and var is set.
+#+begin_src sh
+manualinstall() { \
+    dialog --infobox "Installing \"$1\", an AUR helper..." 4 50
+    sudo -u "$name" mkdir -p "$repodir/$1"
+    sudo -u "$name" git clone --depth 1 "https://aur.archlinux.org/$1.git" "$repodir/$1" >/dev/null 2>&1 ||
+        { cd "$repodir/$1" || return 1 ; sudo -u "$name" git pull --force origin master;}
+    cd "$repodir/$1"
+    sudo -u "$name" -D "$repodir/$1" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
+}
+#+end_src
+
+**** maininstall
+Installs programs from main repository - standard pacman command
+#+begin_src sh
+maininstall() { \
+    dialog --title "LARBS Installation" --infobox "Installing \`$1\` ($n of $total). $1 $2" 5 70
+    installpkg "$1"
+    }
+#+end_src
+
+**** gitmakeinstall
+This function installs programs by pulling them from git repository and running =make install= command inside downloaded folder - Mostly used for my own fork of =dwm= and =dwmblocks=
+#+begin_src sh
+gitmakeinstall() {
+    progname="$(basename "$1" .git)"
+    dir="$repodir/$progname"
+    dialog --title "LARBS Installation" --infobox "Installing \`$progname\` ($n of $total) via \`git\` and \`make\`. $(basename "$1") $2" 5 70
+    sudo -u "$name" git clone --depth 1 "$1" "$dir" >/dev/null 2>&1 || { cd "$dir" || return 1 ; sudo -u "$name" git pull --force origin master;}
+    cd "$dir" || exit 1
+    make >/dev/null 2>&1
+    make install >/dev/null 2>&1
+    cd /tmp || return 1 ;}
+#+end_src
+
+**** AUR install
+Installs programs from AUR using previously installed AUR helper
+#+begin_src sh
+aurinstall() { \
+    dialog --title "LARBS Installation" --infobox "Installing \`$1\` ($n of $total) from the AUR. $1 $2" 5 70
+    echo "$aurinstalled" | grep -q "^$1$" && return 1
+    sudo -u "$name" $aurhelper -S --noconfirm "$1" >/dev/null 2>&1
+    }
+#+end_src
+
+**** pip install
+Installs package using python's pip command
+#+begin_src sh
+pipinstall() { \
+    dialog --title "LARBS Installation" --infobox "Installing the Python package \`$1\` ($n of $total). $1 $2" 5 70
+    [ -x "$(command -v "pip")" ] || installpkg python-pip >/dev/null 2>&1
+    yes | pip install "$1"
+    }
+#+end_src
+
+**** Installationloop
+This function goes through each row specified in =progs.csv= file and calls apropriate function to install the package.
+#+begin_src sh
+installationloop() { \
+    ([ -f "$progsfile" ] && cp "$progsfile" /tmp/progs.csv) || curl -Ls "$progsfile" | sed '/^#/d' > /tmp/progs.csv
+    total=$(wc -l < /tmp/progs.csv)
+    aurinstalled=$(pacman -Qqm)
+    while IFS=, read -r tag program comment; do
+        n=$((n+1))
+        echo "$comment" | grep -q "^\".*\"$" && comment="$(echo "$comment" | sed -E "s/(^\"|\"$)//g")"
+        case "$tag" in
+            "A") aurinstall "$program" "$comment" ;;
+            "G") gitmakeinstall "$program" "$comment" ;;
+            "P") pipinstall "$program" "$comment" ;;
+            *) maininstall "$program" "$comment" ;;
+        esac
+    done < /tmp/progs.csv ;}
+#+end_src
+
 *** Error message
 in case something goes sideways it's good idea to have some sort of error message.
 #+begin_src sh
@@ -100,44 +177,36 @@ error() { printf "%s\n" "$1" >&2; exit 1; }
 
 *** Welcome dialog
 #+begin_src sh
-
 welcomemsg() { \
     dialog --title "Welcome!" --msgbox "Welcome to Zeth's Bootstrapping Script!\\n\\nThis script will automatically install a fully-featured Linux desktop, which I use as my main machine.\\n\\n-Luke" 10 60
 
     dialog --colors --title "Important Note!" --yes-label "All ready!" --no-label "Return..." --yesno "Be sure the computer you are using has current pacman updates and refreshed Arch keyrings.\\n\\nIf it does not, the installation of some programs might fail." 8 70
 }
-
 #+end_src
 
 *** Pacman tweaks
 This function edits =/etc/pacman.conf= file to enable parallel downloads and makes it more colorful also adds automatic hook to clean cache and notify of orphanned packages. Finally it also enables multilib in pacman's repository
 #+begin_src sh
-echo -ne "
-################################################
-Enabling parallel downloads and candy for pacman
-################################################
-"
-sudo sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
-sudo sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
-echo -ne "
-#########################################################
-Enabling paccache hook to automatically clean pacman cache
-#########################################################
-"
-sudo tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
-[Trigger]
-Operation = Upgrade
-Operation = Install
-Operation = Remove
-Type = Package
-Target = *
+pacmantweaks() { \
+    dialog --infobox "Enabling parallel downloads and candy for pacman" 5 70
+    sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
+    sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
+    dialog --infobox "Enabling paccache hook to automatically clean pacman cache" 5 70
+    tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
+    [Trigger]
+    Operation = Upgrade
+    Operation = Install
+    Operation = Remove
+    Type = Package
+    Target = *
 
-[Action]
-Description = Cleaning pacman cache with paccache …
-When = PostTransaction
-Exec = /usr/bin/paccache -r
-EOF
-pacman -Sy --noconfirm --needed
+    [Action]
+    Description = Cleaning pacman cache with paccache …
+    When = PostTransaction
+    Exec = /usr/bin/paccache -r
+    EOF
+    pacman -Sy --noconfirm --needed
+}
 #+end_src
 
 #+RESULTS:
@@ -145,67 +214,112 @@ pacman -Sy --noconfirm --needed
 *** makeflags and cores
 This function detects how many cores the CPU has and adjusts makeflags and compression settings accordingly
 #+begin_src sh
-echo -ne "
-#################################################
-Detecting number of cores and adjusting makeflags
-#################################################
-"
-nc=$(grep -c ^processor /proc/cpuinfo)
-TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
-if [[  $TOTAL_MEM -gt 8000000 ]]; then
-    sudo sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
-    sudo sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
-fi
+makeflags() {\
+    dialog --infobox "Detecting number of cores and adjusting makeflags" 5 70
+    nc=$(grep -c ^processor /proc/cpuinfo)
+    TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
+    if [[  $TOTAL_MEM -gt 8000000 ]]; then
+        sudo sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
+        sudo sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
+    fi
+}
 #+end_src
 
 *** vconsole.conf and keyboard
 Set vitrtual console's font to =Lat2-Terminus16= and keymap to =cz-qwertz= this is personal preference. The font supports czech characters while the keymap saves me the headache of having to fight my own muscle memory as far as keyboard layout goes.
 #+begin_src sh
-echo -ne "
-################################################################################
-Writing settings to /etc/vconsole.conf in case I ever need to do things from TTY
-################################################################################
-"
-sudo tee /etc/vconsole.conf >/dev/null <<'EOF'
-KEYMAP=cz-qwertz
-FONT=Lat2-Terminus16
-EOF
-echo -ne"
-########################
-Setting X's locale to cz
-########################
-"
-localectl set-x11-keymap cz
+vcons() {\
+    dialog --infobox "Writing settings to /etc/vconsole.conf in case I ever need to do things from TTY" 5 70
+    tee /etc/vconsole.conf >/dev/null <<'EOF'
+    KEYMAP=cz-qwertz
+    FONT=Lat2-Terminus16
+    EOF
+    localectl set-x11-keymap cz
+}
 #+end_src
 
 *** Install microcode
 Determine which processor we are running and install microcode accordingly
 #+begin_src sh
-echo -ne "
-#############################
-Installing microcodes for CPU
-#############################
-"
-proc_type=$(lscpu)
-if grep -E "GenuineIntel" <<< ${proc_type}; then
-    echo "Installing Intel microcode"
-    pacman -S --noconfirm --needed intel-ucode
-    proc_ucode=intel-ucode.img
-elif grep -E "AuthenticAMD" <<< ${proc_type}; then
-    echo "Installing AMD microcode"
-    pacman -S --noconfirm --needed amd-ucode
-    proc_ucode=amd-ucode.img
-fi
+microcode() {\
+    dialog --infobox "Installing microcodes for CPU" 5 70
+    proc_type=$(lscpu)
+    if grep -E "GenuineIntel" <<< ${proc_type}; then
+        echo "Installing Intel microcode"
+        pacman -S --noconfirm --needed intel-ucode
+        proc_ucode=intel-ucode.img
+    elif grep -E "AuthenticAMD" <<< ${proc_type}; then
+        echo "Installing AMD microcode"
+        pacman -S --noconfirm --needed amd-ucode
+        proc_ucode=amd-ucode.img
+    fi
+}
 #+end_src
 
+*** User related functions and welcome messages
+This blob of code has been shamelessly copy-pasted from original LARBS script. These functions prompt you for =$user= name, check if that user exists and if it does, it will warn you about the fact that your actions will overwrite that user's home dir. Also sets password group and permissions for that user.
+#+begin_src sh
+getuserandpass() { \
+    # Prompts user for new username an password.
+    name=$(dialog --inputbox "First, please enter a name for the user account." 10 60 3>&1 1>&2 2>&3 3>&1) || exit 1
+    while ! echo "$name" | grep -q "^[a-z_][a-z0-9_-]*$"; do
+        name=$(dialog --no-cancel --inputbox "Username not valid. Give a username beginning with a letter, with only lowercase letters, - or _." 10 60 3>&1 1>&2 2>&3 3>&1)
+    done
+    pass1=$(dialog --no-cancel --passwordbox "Enter a password for that user." 10 60 3>&1 1>&2 2>&3 3>&1)
+    pass2=$(dialog --no-cancel --passwordbox "Retype password." 10 60 3>&1 1>&2 2>&3 3>&1)
+    while ! [ "$pass1" = "$pass2" ]; do
+        unset pass2
+        pass1=$(dialog --no-cancel --passwordbox "Passwords do not match.\\n\\nEnter password again." 10 60 3>&1 1>&2 2>&3 3>&1)
+        pass2=$(dialog --no-cancel --passwordbox "Retype password." 10 60 3>&1 1>&2 2>&3 3>&1)
+    done ;}
+
+usercheck() { \
+    ! { id -u "$name" >/dev/null 2>&1; } ||
+    dialog --colors --title "WARNING!" --yes-label "CONTINUE" --no-label "No wait..." --yesno "The user \`$name\` already exists on this system. LARBS can install for a user already existing, but it will \\Zboverwrite\\Zn any conflicting settings/dotfiles on the user account.\\n\\nLARBS will \\Zbnot\\Zn overwrite your user files, documents, videos, etc., so don't worry about that, but only click <CONTINUE> if you don't mind your settings being overwritten.\\n\\nNote also that LARBS will change $name's password to the one you just gave." 14 70
+    }
+
+preinstallmsg() { \
+    dialog --title "Let's get this party started!" --yes-label "Let's go!" --no-label "No, nevermind!" --yesno "The rest of the installation will now be totally automated, so you can sit back and relax.\\n\\nIt will take some time, but when done, you can relax even more with your complete system.\\n\\nNow just press <Let's go!> and the system will begin installation!" 13 60 || { clear; exit 1; }
+    }
+
+adduserandpass() { \
+    # Adds user `$name` with password $pass1.
+    dialog --infobox "Adding user \"$name\"..." 4 50
+    useradd -m -g wheel -s /bin/zsh "$name" >/dev/null 2>&1 ||
+    usermod -a -G wheel "$name" && mkdir -p /home/"$name" && chown "$name":wheel /home/"$name"
+    export repodir="/home/$name/.local/src"; mkdir -p "$repodir"; chown -R "$name":wheel "$(dirname "$repodir")"
+    echo "$name:$pass1" | chpasswd
+    unset pass1 pass2 ;}
+
+refreshkeys() { \
+    case "$(readlink -f /sbin/init)" in
+        *systemd* )
+            dialog --infobox "Refreshing Arch Keyring..." 4 40
+            pacman --noconfirm -S archlinux-keyring >/dev/null 2>&1
+            ;;
+        *)
+            dialog --infobox "Enabling Arch Repositories..." 4 40
+            pacman --noconfirm --needed -S artix-keyring artix-archlinux-support >/dev/null 2>&1
+            for repo in extra community; do
+                grep -q "^\[$repo\]" /etc/pacman.conf ||
+                    echo "[$repo]
+Include = /etc/pacman.d/mirrorlist-arch" >> /etc/pacman.conf
+            done
+            pacman -Sy >/dev/null 2>&1
+            pacman-key --populate archlinux >/dev/null 2>&1
+            ;;
+    esac ;}
+#+end_src
+*** Newperms
+this function adds sets special sudoers settings for install and after - this function should get called twice in the script - first to enable paswordless permissions in order to install necessary programs, and second time to limit the sudo permissions to =wheel= group to specific set of commands.
+#+begin_src sh
+newperms() { \
+    sed -i "/#LARBS/d" /etc/sudoers
+    echo "$* #LARBS" >> /etc/sudoers ;}
+#+end_src
 
 *** Enabling AUR
-This function should install an AUR helper which will be needed to help install some packages from the list. The commands need to be run as non-root user. For that I've set up a variable.
+This function should install an AUR helper which will be needed to help install some packages from the list. The commands need to be run as non-root user. For that I've set up a variable. We'll also gonna need to temporarily set permissions for =$user= since AUR helper commands can not be run as root user - that would result in division by zero and make universe implode
 #+begin_src sh
-echo -ne "
-#################################
-Installing Paru-bin an AUR helper
-#################################
-"
-#+end_src
 
+#+end_src
