@@ -8,7 +8,7 @@ sudo sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
 sudo sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
 echo -ne "
 #########################################################
-Enablng paccache hook to automatically clean pacman cache
+Enabling paccache hook to automatically clean pacman cache
 #########################################################
 "
 sudo tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
@@ -71,7 +71,3 @@ echo -ne "
 Installing Paru-bin an AUR helper
 #################################
 "
-[ -d $srcdir/paru-bin ] && cd $srcdir/paru-bin || mkdir -p "$srcdir/paru-bin"
-git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$srcdir/paru-bin" >/dev/null 2>&1 ||
-cd "$srcdir/paru-bin"
-sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1

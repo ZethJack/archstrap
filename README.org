@@ -1,7 +1,7 @@
 #+TITLE: Bootstrap script
 #+author:    Zeth
 #+email:     zeth@zethjack.eu
-#+PROPERTY: header-args:sh :tangle no :shebang "#!/bin/env bash" :padline no :tangle-mode (identity #o755)
+#+PROPERTY: header-args:sh :tangle deploy.sh :shebang "#!/bin/env bash" :padline no :tangle-mode (identity #o755)
 
 :PROPERTIES:
 :VISIBILITY: children
@@ -9,24 +9,38 @@
 
 ** Table of contents :TOC_3_gh:
 - [[#about-this-file][About this file]]
+  - [[#what-it-does][What it does:]]
+- [[#requirements][Requirements]]
 - [[#usage][Usage]]
 - [[#the-script][The script]]
   - [[#variables][Variables]]
   - [[#function-definitions][Function definitions]]
     - [[#self-destruct-function][Self-destruct function]]
+    - [[#installscripts][Installscripts]]
+    - [[#error-message][Error message]]
+    - [[#welcome-dialog][Welcome dialog]]
     - [[#pacman-tweaks][Pacman tweaks]]
     - [[#makeflags-and-cores][makeflags and cores]]
     - [[#vconsoleconf-and-keyboard][vconsole.conf and keyboard]]
     - [[#install-microcode][Install microcode]]
     - [[#enabling-aur][Enabling AUR]]
-  - [[#putting-it-all-together][Putting it all together]]
 
 * About this file
-This is literate script that is supposed to configure freshly installed arch linux system and bring it from out-of-the-box to my personalized system. It should install necessary programs, download and set up the dotfiles and add some tweaks such as enable parallel downloads and candy mode for pacman.
-*DISCLAIMER!!!* This script has been written for my personal use and as such comes with NO WARRANTY. Some files require =sudo= permissions for editing. I advise you to /read/ the script first and see what it does before run it, rather than mindlessly make it executable and run it for no reason.
+This is modified version of Luke Smith's auto rice bootstrap script (aka LARBS) that has been reworked into literate programming style to add documentation. On top of that this script also performs some tweaks on top of the setup.
+** What it does:
+- creates new user and adds necessary permissions
+- downloads and installs dotfiles from my repository
+- adds hook to =pacman= that helps maintain the package cache
+- enables =eyecandy= and =paralleldownloads= for =pacman=
+- adjusts =makeflags= so that programs use all available cores when compiling programs - this is especiall useful for programs installed from =AUR=
+- downloads and installs =microcode= for relevant CPU as well as =drivers= for detected GPU
+- downloads and installs programs and utilities from specified =progs.csv= file.
+This is literate script that is supposed to configure freshly installed arch linux system and bring it from out-of-the-box to my personalized system. It should install necessary programs, download and set up *DISCLAIMER!!!* This script has been written for my personal use and as such comes with NO WARRANTY
 
+* Requirements
+- This script uses dialog heavily, so having that installed is advised
 * Usage
-1. After booting into newly installed system run script as regular user. Some parts of the script require elevation to sudo, so permissions for the user will be necessary.
+1. After booting into newly installed system run script as =root=
 2. download the =deploy.sh= script from this repository:
    - with wget
      #+begin_src sh :tangle no :shebang
@@ -43,26 +57,61 @@ This is literate script that is supposed to configure freshly installed arch lin
 ** Variables
 #+BEGIN_SRC sh
 currentscript=$0
-user=zeth
-srcdir=/home/$user/.local/src
+while getopts ":a:r:b:p:h" o; do case "${o}" in
+    h) printf "Optional arguments for custom use:\\n  -r: Dotfiles repository (local file or url)\\n  -p: Dependencies and programs csv (local file or url)\\n  -a: AUR helper (must have pacman-like syntax)\\n  -h: Show this message\\n" && exit 1 ;;
+    r) dotfilesrepo=${OPTARG} && git ls-remote "$dotfilesrepo" || exit 1 ;;
+    b) repobranch=${OPTARG} ;;
+    p) progsfile=${OPTARG} ;;
+    a) aurhelper=${OPTARG} ;;
+    *) printf "Invalid option: -%s\\n" "$OPTARG" && exit 1 ;;
+esac done
+
+[ -z "$dotfilesrepo" ] && dotfilesrepo="https://github.com/ZethJack/dotfiles.git"
+[ -z "$progsfile" ] && progsfile="https://raw.githubusercontent.com/ZethJack/archstrap/master/progs.csv"
+[ -z "$aurhelper" ] && aurhelper="paru-bin"
+[ -z "$repobranch" ] && repobranch="master"
 #+END_SRC
 
 ** Function definitions
 
 *** Self-destruct function
 This function is called upon scripts exit and is used to self-delete the script once everything is done - it's disabled for time being i.e. it will not get tangled into final script.
-#+BEGIN_SRC sh :tangle no
-function finish {
+#+BEGIN_SRC sh
+finish() {
     echo "shredding ${currentscript}"; shred -u ${currentscript};
 }
 
 #whenver the script exits call the function "finish"
 trap finish EXIT
 #+END_SRC
+*** Installscripts
+
+**** installpkg
+Basic pacman call
+#+begin_src sh
+installpkg(){ pacman --noconfirm --needed -S "$1" >/dev/null 2>&1 ;}
+#+end_src
+
+*** Error message
+in case something goes sideways it's good idea to have some sort of error message.
+#+begin_src sh
+error() { printf "%s\n" "$1" >&2; exit 1; }
+#+end_src
+
+*** Welcome dialog
+#+begin_src sh
+
+welcomemsg() { \
+    dialog --title "Welcome!" --msgbox "Welcome to Zeth's Bootstrapping Script!\\n\\nThis script will automatically install a fully-featured Linux desktop, which I use as my main machine.\\n\\n-Luke" 10 60
+
+    dialog --colors --title "Important Note!" --yes-label "All ready!" --no-label "Return..." --yesno "Be sure the computer you are using has current pacman updates and refreshed Arch keyrings.\\n\\nIf it does not, the installation of some programs might fail." 8 70
+}
+
+#+end_src
 
 *** Pacman tweaks
 This function edits =/etc/pacman.conf= file to enable parallel downloads and makes it more colorful also adds automatic hook to clean cache and notify of orphanned packages. Finally it also enables multilib in pacman's repository
-#+begin_src sh :noweb-ref pacman
+#+begin_src sh
 echo -ne "
 ################################################
 Enabling parallel downloads and candy for pacman
@@ -72,7 +121,7 @@ sudo sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
 sudo sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
 echo -ne "
 #########################################################
-Enablng paccache hook to automatically clean pacman cache
+Enabling paccache hook to automatically clean pacman cache
 #########################################################
 "
 sudo tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
@@ -95,7 +144,7 @@ pacman -Sy --noconfirm --needed
 
 *** makeflags and cores
 This function detects how many cores the CPU has and adjusts makeflags and compression settings accordingly
-#+begin_src sh :noweb-ref procs
+#+begin_src sh
 echo -ne "
 #################################################
 Detecting number of cores and adjusting makeflags
@@ -111,7 +160,7 @@ fi
 
 *** vconsole.conf and keyboard
 Set vitrtual console's font to =Lat2-Terminus16= and keymap to =cz-qwertz= this is personal preference. The font supports czech characters while the keymap saves me the headache of having to fight my own muscle memory as far as keyboard layout goes.
-#+begin_src sh :noweb-ref vconsole
+#+begin_src sh
 echo -ne "
 ################################################################################
 Writing settings to /etc/vconsole.conf in case I ever need to do things from TTY
@@ -131,7 +180,7 @@ localectl set-x11-keymap cz
 
 *** Install microcode
 Determine which processor we are running and install microcode accordingly
-#+begin_src sh :noweb-ref microcodes
+#+begin_src sh
 echo -ne "
 #############################
 Installing microcodes for CPU
@@ -152,24 +201,11 @@ fi
 
 *** Enabling AUR
 This function should install an AUR helper which will be needed to help install some packages from the list. The commands need to be run as non-root user. For that I've set up a variable.
-#+begin_src sh :noweb-ref enableaur
+#+begin_src sh
 echo -ne "
 #################################
 Installing Paru-bin an AUR helper
 #################################
 "
-[ -d $srcdir/paru-bin ] && cd $srcdir/paru-bin || mkdir -p "$srcdir/paru-bin"
-git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$srcdir/paru-bin" >/dev/null 2>&1 ||
-cd "$srcdir/paru-bin"
-sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1
 #+end_src
 
-** Putting it all together
-the previous code blocks in this readme haven't been exported into an actual file. The following code blocks uses *noweb* references to specify the order in which each code block should be inserted into final =deploy.sh= file.
-#+begin_src sh :tangle deploy.sh :noweb no-export
-<<pacman>>
-<<procs>>
-<<vconsole>>
-<<microcodes>>
-<<enableaur>>
-#+end_src
