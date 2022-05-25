@@ -1,7 +1,7 @@
 #+TITLE: Bootstrap script
 #+author:    Zeth
 #+email:     zeth@zethjack.eu
-#+PROPERTY: header-args:sh :tangle deploy.sh :shebang "#!/bin/env bash" :padline no :tangle-mode (identity #o755)
+#+PROPERTY: header-args:sh :tangle no :shebang "#!/bin/env bash" :padline no :tangle-mode (identity #o755)
 
 :PROPERTIES:
 :VISIBILITY: children
@@ -62,118 +62,115 @@ trap finish EXIT
 
 *** Pacman tweaks
 This function edits =/etc/pacman.conf= file to enable parallel downloads and makes it more colorful also adds automatic hook to clean cache and notify of orphanned packages. Finally it also enables multilib in pacman's repository
-#+begin_src sh
-function pacmantweaks {
-    echo -ne "
-    ################################################
-    Enabling parallel downloads and candy for pacman
-    ################################################
-    "
-    sudo sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
-    sudo sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
-    echo -ne "
-    #########################################################
-    Enablng paccache hook to automatically clean pacman cache
-    #########################################################
-    "
-    sudo tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
-    [Trigger]
-    Operation = Upgrade
-    Operation = Install
-    Operation = Remove
-    Type = Package
-    Target = *
+#+begin_src sh :noweb-ref pacman
+echo -ne "
+################################################
+Enabling parallel downloads and candy for pacman
+################################################
+"
+sudo sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
+sudo sed -i '/ParallelDownloads/ a ILoveCandy' /etc/pacman.conf
+echo -ne "
+#########################################################
+Enablng paccache hook to automatically clean pacman cache
+#########################################################
+"
+sudo tee /usr/share/libalpm/hooks/paccache.hook >/dev/null <<'EOF'
+[Trigger]
+Operation = Upgrade
+Operation = Install
+Operation = Remove
+Type = Package
+Target = *
 
-    [Action]
-    Description = Cleaning pacman cache with paccache …
-    When = PostTransaction
-    Exec = /usr/bin/paccache -r
-    EOF
-    pacman -Sy --noconfirm --needed
-}
+[Action]
+Description = Cleaning pacman cache with paccache …
+When = PostTransaction
+Exec = /usr/bin/paccache -r
+EOF
+pacman -Sy --noconfirm --needed
 #+end_src
+
+#+RESULTS:
 
 *** makeflags and cores
 This function detects how many cores the CPU has and adjusts makeflags and compression settings accordingly
-#+begin_src sh
-function procs {
-    echo -ne "
-    #################################################
-    Detecting number of cores and adjusting makeflags
-    #################################################
-    "
-    nc=$(grep -c ^processor /proc/cpuinfo)
-    TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
-    if [[  $TOTAL_MEM -gt 8000000 ]]; then
-        sudo sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
-        sudo sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
-    fi
-}
+#+begin_src sh :noweb-ref procs
+echo -ne "
+#################################################
+Detecting number of cores and adjusting makeflags
+#################################################
+"
+nc=$(grep -c ^processor /proc/cpuinfo)
+TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
+if [[  $TOTAL_MEM -gt 8000000 ]]; then
+    sudo sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
+    sudo sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
+fi
 #+end_src
 
 *** vconsole.conf and keyboard
 Set vitrtual console's font to =Lat2-Terminus16= and keymap to =cz-qwertz= this is personal preference. The font supports czech characters while the keymap saves me the headache of having to fight my own muscle memory as far as keyboard layout goes.
-#+begin_src sh
-function vconsole {
-    echo -ne "
-    ################################################################################
-    Writing settings to /etc/vconsole.conf in case I ever need to do things from TTY
-    ################################################################################
-    "
-    sudo tee /etc/vconsole.conf >/dev/null <<'EOF'
-    KEYMAP=cz-qwertz
-    FONT=Lat2-Terminus16
-    EOF
-    echo -ne"
-    ########################
-    Setting X's locale to cz
-    ########################
-    "
-    localectl set-x11-keymap cz
-}
+#+begin_src sh :noweb-ref vconsole
+echo -ne "
+################################################################################
+Writing settings to /etc/vconsole.conf in case I ever need to do things from TTY
+################################################################################
+"
+sudo tee /etc/vconsole.conf >/dev/null <<'EOF'
+KEYMAP=cz-qwertz
+FONT=Lat2-Terminus16
+EOF
+echo -ne"
+########################
+Setting X's locale to cz
+########################
+"
+localectl set-x11-keymap cz
 #+end_src
 
 *** Install microcode
 Determine which processor we are running and install microcode accordingly
-#+begin_src sh
-function microcodes {
-    echo -ne "
-    #############################
-    Installing microcodes for CPU
-    #############################
-    "
-    proc_type=$(lscpu)
-    if grep -E "GenuineIntel" <<< ${proc_type}; then
-        echo "Installing Intel microcode"
-        pacman -S --noconfirm --needed intel-ucode
-        proc_ucode=intel-ucode.img
-    elif grep -E "AuthenticAMD" <<< ${proc_type}; then
-        echo "Installing AMD microcode"
-        pacman -S --noconfirm --needed amd-ucode
-        proc_ucode=amd-ucode.img
-    fi
-}
+#+begin_src sh :noweb-ref microcodes
+echo -ne "
+#############################
+Installing microcodes for CPU
+#############################
+"
+proc_type=$(lscpu)
+if grep -E "GenuineIntel" <<< ${proc_type}; then
+    echo "Installing Intel microcode"
+    pacman -S --noconfirm --needed intel-ucode
+    proc_ucode=intel-ucode.img
+elif grep -E "AuthenticAMD" <<< ${proc_type}; then
+    echo "Installing AMD microcode"
+    pacman -S --noconfirm --needed amd-ucode
+    proc_ucode=amd-ucode.img
+fi
 #+end_src
 
 
 *** Enabling AUR
 This function should install an AUR helper which will be needed to help install some packages from the list. The commands need to be run as non-root user. For that I've set up a variable.
-#+begin_src sh
-function enableaur {
-    mkdir -p "$srcdir/paru-bin"
-    git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$srcdir/paru" >/dev/null 2>&1 ||
-    { cd "$srcdir/paru-bin" || return 1 ; git pull --force origin master;}
-    cd "$srcdir/paru-bin" || return 1
-    sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
-}
+#+begin_src sh :noweb-ref enableaur
+echo -ne "
+#################################
+Installing Paru-bin an AUR helper
+#################################
+"
+mkdir -p "$srcdir/paru-bin"
+git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$srcdir/paru" >/dev/null 2>&1 ||
+{ cd "$srcdir/paru-bin" || return 1 ; git pull --force origin master;}
+cd "$srcdir/paru-bin" || return 1
+sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
 #+end_src
 
 ** Actual script
 Of course for script to do anything it's probably a good idea to call these functions in order
-#+begin_src sh
-pacmantweaks
-procs
-vconsole
-microcodes
-enableaur
+#+begin_src sh :noweb no-export
+<<pacman>>
+<<procs>>
+<<vconsole>>
+<<microcodes>>
+<<enableaur>>
 #+end_src
