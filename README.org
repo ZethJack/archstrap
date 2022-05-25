@@ -19,7 +19,7 @@
     - [[#vconsoleconf-and-keyboard][vconsole.conf and keyboard]]
     - [[#install-microcode][Install microcode]]
     - [[#enabling-aur][Enabling AUR]]
-  - [[#actual-script][Actual script]]
+  - [[#putting-it-all-together][Putting it all together]]
 
 * About this file
 This is literate script that is supposed to configure freshly installed arch linux system and bring it from out-of-the-box to my personalized system. It should install necessary programs, download and set up the dotfiles and add some tweaks such as enable parallel downloads and candy mode for pacman.
@@ -165,8 +165,8 @@ cd "$srcdir/paru-bin" || return 1
 sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
 #+end_src
 
-** Actual script :ignore:
-Of course for script to do anything it's probably a good idea to call these functions in order
+** Putting it all together
+the previous code blocks in this readme haven't been exported into an actual file. The following code blocks uses *noweb* references to specify the order in which each code block should be inserted into final =deploy.sh= file.
 #+begin_src sh :tangle deploy.sh :noweb no-export
 <<pacman>>
 <<procs>>
