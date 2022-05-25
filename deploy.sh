@@ -88,7 +88,7 @@ pacmantweaks() { \
     Description = Cleaning pacman cache with paccache …
     When = PostTransaction
     Exec = /usr/bin/paccache -r
-    EOF
+EOF
     pacman -Sy --noconfirm --needed
 }
 makeflags() {\
@@ -105,7 +105,7 @@ vcons() {\
     tee /etc/vconsole.conf >/dev/null <<'EOF'
     KEYMAP=cz-qwertz
     FONT=Lat2-Terminus16
-    EOF
+EOF
     localectl set-x11-keymap cz
 }
 microcode() {\
