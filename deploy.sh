@@ -74,4 +74,4 @@ Installing Paru-bin an AUR helper
 [ -d $srcdir/paru-bin ] && cd $srcdir/paru-bin || mkdir -p "$srcdir/paru-bin"
 git clone --depth 1 "https://aur.archlinux.org/paru-bin.git" "$srcdir/paru-bin" >/dev/null 2>&1 ||
 cd "$srcdir/paru-bin"
-sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1 || return 1
+sudo -D "$srcdir/paru-bin" makepkg --noconfirm -si >/dev/null 2>&1
