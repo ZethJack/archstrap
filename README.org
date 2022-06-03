@@ -30,6 +30,9 @@
     - [[#finalize][Finalize]]
   - [[#putting-it-all-together][Putting it all together]]
 - [[#progscsv-file][Progs.csv file]]
+- [[#issues][Issues]]
+  - [[#replace-dialog-with-printing-function][Replace dialog with printing function]]
+  - [[#fix-putgitrepo-function][fix putgitrepo function]]
 
 * About this file
 This is modified version of Luke Smith's auto rice bootstrap script (aka LARBS) that has been reworked into literate programming style to add documentation. On top of that this script also performs some tweaks on top of the setup.
@@ -451,3 +454,11 @@ clear
 #+end_src
 * Progs.csv file
 This repository also contains the =progs.csv= file which is parsed by script's =installationloop()= function to install programs using apropriate method based on the values within the table.
+
+* Issues
+unfortunately there were a few things that cropped up during testing that need to be adressed before I use the script effectively
+
+** TODO Replace dialog with printing function
+whenever there is an error it immediatelly gets buried under next clear and a dialog. Either replace it completely, or alternatively make it so the output gets dumped into the logfile that can be checked for errors afterwards - see Chris Titus's Archtitus install script, except adapt it to be used *AFTER* mainline install.
+** TODO fix putgitrepo function
+While dotfiles have been cloned into bare .cfg repository, the actual files were missing - this is unintended as the setup is meant to use .cfg as tracking directory while the worktree is in $HOME. So either use different command, or download a script to be run separately.
