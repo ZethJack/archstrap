@@ -29,6 +29,7 @@
     - [[#systembeepoff][Systembeepoff]]
     - [[#finalize][Finalize]]
   - [[#putting-it-all-together][Putting it all together]]
+- [[#progscsv-file][Progs.csv file]]
 
 * About this file
 This is modified version of Luke Smith's auto rice bootstrap script (aka LARBS) that has been reworked into literate programming style to add documentation. On top of that this script also performs some tweaks on top of the setup.
@@ -448,3 +449,5 @@ newperms "%wheel ALL=(ALL) ALL #LARBS
 finalize
 clear
 #+end_src
+* Progs.csv file
+This repository also contains the =progs.csv= file which is parsed by script's =installationloop()= function to install programs using apropriate method based on the values within the table.
